@@ -1,0 +1,45 @@
+image: docker:dind
+
+services:
+  - docker:dind
+
+variables:
+  CI_REGISTRY_IMAGE: registry/${CI_PROJECT_PATH}
+  KUBECONFIG: /etc/deploy/config
+  DOCKER_HOST: tcp://localhost:2375
+  DOCKER_TLS_CERTDIR: ""
+
+stages:
+  - build
+
+.build_image: &build_image
+  stage: build
+  image:
+    name: gcr.io/kaniko-project/executor:debug
+    entrypoint: [""]
+  variables:
+    DOCKER_DRIVER: overlay2
+  before_script:
+    - echo "${DOCKER_AUTH_CONFIG}" > /kaniko/.docker/config.json
+    - mv ./.env.example ./.env
+    - sed -i "s/__chat_id__/${CHAT_ID}/g" ./.env
+    - sed -i "s/__tlg_token__/${TELEGRAM_TOKEN}/g" ./.env
+    - sed -i "s/__db_user__/${DB_USER}/g" ./.env
+    - sed -i "s/__db_pass__/${DB_PASS}/g" ./.env
+    - sed -i "s/__nb_token__/${NETBOX_TOKEN}/g" ./.env
+
+build:
+  <<: *build_image
+  script:
+    - /kaniko/executor --context $CI_PROJECT_DIR --dockerfile ./Dockerfile --destination registry/ipscan:$CI_COMMIT_SHORT_SHA --destination registry/ipscan:latest
+  rules:
+    - if: $CI_COMMIT_MESSAGE =~ /NOBUILD/
+      when: never
+    - if: '$CI_COMMIT_BRANCH =~ /^master/'
+      changes:
+        - ipscan.py
+        - requirements.txt
+        - Dockerfile
+  tags:
+    - k8s-prod-gitlab
+

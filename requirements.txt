@@ -1,0 +1,4 @@
+pymysql
+pynetbox
+python-dotenv
+cryptography
